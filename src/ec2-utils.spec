@@ -1,6 +1,13 @@
 %define _buildid .22
 
+# default to upstart on EL < 7, systemd on EL >= 7
+%if 0%{?rhel} < 7
 %bcond_without upstart
+%bcond_with systemd
+%else
+%bcond_with upstart
+%bcond_without systemd
+%endif
 
 Name:      ec2-utils
 Summary:   A set of tools for running in EC2
@@ -27,8 +34,10 @@ Source15:  ec2udev-vcpu
 
 Source20:  ixgbevf.conf
 Source21:  acpiphp.modules
+Source22:  elastic-network-interfaces.service
 
-URL:       http://developer.amazonwebservices.com/connect/entry.jspa?externalID=1825
+URL:       https://github.com/jantman/ec2-utils-el7
+Packager:  Jason Antman
 BuildArch: noarch
 Provides:  ec2-metadata
 Obsoletes: ec2-metadata
@@ -36,7 +45,10 @@ Requires:  curl
 BuildRoot: %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
 %description
-ec2-utils contains a set of utilities for running in ec2.
+ec2-utils contains a set of utilities for running in ec2,
+rebuilt for EL7/systemd
+
+Original URL: http://developer.amazonwebservices.com/connect/entry.jspa?externalID=1825
 
 %package -n ec2-net-utils
 Summary:   A set of network tools for managing ENIs
@@ -47,6 +59,10 @@ Requires:  curl
 Requires:  iproute
 %if %{with upstart}
 Requires:  upstart
+%endif
+%if %{with systemd}
+Requires:  systemd
+BuildRequires:  systemd
 %endif
 
 %description -n ec2-net-utils
@@ -67,6 +83,9 @@ mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/dhcp/dhclient.d/
 %if %{with upstart}
 mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/init/
 %endif
+%if %{with systemd}
+mkdir -p $RPM_BUILD_ROOT%{_unitdir}
+%endif
 mkdir -p $RPM_BUILD_ROOT%{_mandir}/man8/
 
 install -m755 %{SOURCE0} $RPM_BUILD_ROOT/opt/aws/bin/
@@ -84,6 +103,9 @@ install -m755 %{SOURCE7} $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/network-scripts
 install -m755 %{SOURCE10} $RPM_BUILD_ROOT%{_sysconfdir}/dhcp/dhclient.d/
 %if %{with upstart}
 install -m644 %{SOURCE13} $RPM_BUILD_ROOT%{_sysconfdir}/init
+%endif
+%if %{with systemd}
+install -m644 %{SOURCE22} $RPM_BUILD_ROOT%{_unitdir}
 %endif
 install -m644 %{SOURCE11} $RPM_BUILD_ROOT%{_mandir}/man8/ec2ifup.8
 ln -s ./ec2ifup.8.gz $RPM_BUILD_ROOT%{_mandir}/man8/ec2ifdown.8.gz
@@ -117,11 +139,41 @@ rm -rf $RPM_BUILD_ROOT
 %if %{with upstart}
 %{_sysconfdir}/init/elastic-network-interfaces.conf
 %endif
+%if %{with systemd}
+%{_unitdir}/elastic-network-interfaces.service
+%endif
 %{_mandir}/man8/ec2ifup.8.gz
 %{_mandir}/man8/ec2ifdown.8.gz
 %{_mandir}/man8/ec2ifscan.8.gz
 
+%post -n ec2-net-utils
+%if %{with systemd}
+if [ $1 -eq 1 ] ; then
+    # Initial installation
+    # Enabled by default per "runs once then goes away" exception
+    /bin/systemctl enable elastic-network-interfaces.service     >/dev/null 2>&1 || :
+fi
+%endif
+
+%preun -n ec2-net-utils
+%if %{with systemd}
+if [ $1 -eq 0 ] ; then
+    # Package removal, not upgrade
+    /bin/systemctl --no-reload disable elastic-network-interfaces.service >/dev/null 2>&1 || :
+    # One-shot services -> no need to stop
+fi
+%endif
+
+%postun -n ec2-net-utils
+%if %{with systemd}
+/bin/systemctl daemon-reload >/dev/null 2>&1 || :
+# One-shot services -> no need to restart
+%endif
+
 %changelog
+* Thu Jun 4 2015 Jason Antman <jason@jasonantman.com>
+- package for EL7 / systemd
+
 * Thu May 8 2014 Ben Cressey <bcressey@amazon.com>
 - delay running ec2ifscan until after udev-post
 

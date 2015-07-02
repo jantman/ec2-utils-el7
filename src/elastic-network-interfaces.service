@@ -1,0 +1,20 @@
+# This service finds and configures elastic network interfaces
+# left in an unconfigured state.
+
+# The dependency on udev avoids potential duplication
+# of device rules created before the root filesystem was
+# mounted read-write, and not yet copied to the final
+# location.
+
+[Unit]
+Description=elastic network interfaces
+Documentation=man:ec2ifdown(8) man:ec2ifscan(8) man:ec2ifup(8)
+DefaultDependencies=no
+Wants=systemd-udevd.service
+After=systemd-udevd.service
+WantedBy=multi-user.target
+
+[Service]
+Type=oneshot
+Sockets=systemd-udevd-control.socket systemd-udevd-kernel.socket
+ExecStart=/sbin/ec2ifscan
