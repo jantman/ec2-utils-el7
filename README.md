@@ -11,3 +11,5 @@ in AWS, as it uses [systemd](http://www.freedesktop.org/wiki/Software/systemd/).
 
 This repository repackages Amazon's ``ec2-utils`` for EL7, with the relevant
 upstart scripts converted to systemd units.
+
+[![Project Status: Inactive – The project has reached a stable, usable state but is no longer being actively developed; support/maintenance will be provided as time allows.](http://www.repostatus.org/badges/latest/inactive.svg)](http://www.repostatus.org/#inactive)
